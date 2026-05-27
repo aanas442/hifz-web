@@ -1,13 +1,5 @@
 import * as FileSystem from "expo-file-system";
-
-// ─── Google Drive Config ──────────────────────────────────────────────────────
-// তোমার Google Drive থেকে প্রতিটি পেজের File ID এখানে বসাবে।
-// কীভাবে File ID পাবে:
-//   1. Google Drive এ image upload করো
-//   2. File এ Right Click → "Get link"
-//   3. Link এর মাঝখান থেকে ID নাও:
-//      https://drive.google.com/file/d/THIS_IS_THE_ID/view
-//   4. নিচের object এ বসাও: 1: "ID_HERE"
+import { Platform } from "react-native";
 
 export const DRIVE_CONFIG: { pageFileIds: Record<number, string> } = {
   pageFileIds: {
@@ -632,48 +624,27 @@ export const DRIVE_CONFIG: { pageFileIds: Record<number, string> } = {
 
 export function getPageImageUrl(pageNumber: number): string {
   const fileId = DRIVE_CONFIG.pageFileIds[pageNumber];
-  if (!fileId) return ""; // এখনো ID দেওয়া হয়নি
+  if (!fileId) return "";
   return `https://hifz-proxy.aanasshobuj.workers.dev/?id=${fileId}`;
 }
 
-const CACHE_DIR = (FileSystem.cacheDirectory ?? "") + "quran-pages/";
-
 export async function getCachedPageImage(pageNumber: number): Promise<string> {
   const url = getPageImageUrl(pageNumber);
-  if (!url) return "";
-  const cachedPath = CACHE_DIR + `page-${pageNumber}.jpg`;
+  
+  // ওয়েব ব্রাউজারের জন্য সরাসরি URL রিটার্ন করো (ফাইল সিস্টেমের ঝামেলায় যেও না)
+  if (Platform.OS === 'web') {
+    return url;
+  }
 
+  // মোবাইল ডিভাইসের জন্য তোমার আগের ফাইল সিস্টেমের লজিক কাজ করবে
+  const cachedPath = FileSystem.cacheDirectory + `page-${pageNumber}.jpg`;
   try {
-    // নতুন API: FileSystem.getInfoAsync এর পরিবর্তে FileSystem.statAsync ব্যবহার করা ভালো, 
-    // তবে সহজ সমাধানের জন্য আমরা সরাসরি ফাইল চেক করতে পারি
     const fileInfo = await FileSystem.getInfoAsync(cachedPath);
-    if (fileInfo.exists) {
-      return cachedPath;
+    if (!fileInfo.exists) {
+      await FileSystem.downloadAsync(url, cachedPath);
     }
-    // ডিরেক্টরি নিশ্চিত করা
-    const dirInfo = await FileSystem.getInfoAsync(CACHE_DIR);
-    if (!dirInfo.exists) {
-      await FileSystem.makeDirectoryAsync(CACHE_DIR, { intermediates: true });
-    }
-    // ডাউনলোড করা
-    const downloadRes = await FileSystem.downloadAsync(url, cachedPath);
-    return downloadRes.uri;
+    return cachedPath;
   } catch (error) {
-    console.error("Image loading error:", error);
-    return "";
+    return url;
   }
-}
-export async function preloadPages(currentPage: number): Promise<void> {
-  const toPreload = [currentPage + 1, currentPage + 2, currentPage + 3];
-  for (const p of toPreload) {
-    if (p >= 1 && p <= 611) {
-      getCachedPageImage(p).catch(() => {}); // background, ignore errors
-    }
-  }
-}
-
-export async function clearImageCache(): Promise<void> {
-  try {
-    await FileSystem.deleteAsync(CACHE_DIR, { idempotent: true });
-  } catch {}
 }
