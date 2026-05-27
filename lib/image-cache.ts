@@ -641,21 +641,28 @@ const CACHE_DIR = (FileSystem.cacheDirectory ?? "") + "quran-pages/";
 export async function getCachedPageImage(pageNumber: number): Promise<string> {
   const url = getPageImageUrl(pageNumber);
   if (!url) return "";
-
   const cachedPath = CACHE_DIR + `page-${pageNumber}.jpg`;
 
   try {
-    const info = await FileSystem.getInfoAsync(cachedPath);
-    if (info.exists) return cachedPath;
-
-    await FileSystem.makeDirectoryAsync(CACHE_DIR, { intermediates: true });
-    const result = await FileSystem.downloadAsync(url, cachedPath);
-    return result.uri;
-  } catch {
+    // নতুন API: FileSystem.getInfoAsync এর পরিবর্তে FileSystem.statAsync ব্যবহার করা ভালো, 
+    // তবে সহজ সমাধানের জন্য আমরা সরাসরি ফাইল চেক করতে পারি
+    const fileInfo = await FileSystem.getInfoAsync(cachedPath);
+    if (fileInfo.exists) {
+      return cachedPath;
+    }
+    // ডিরেক্টরি নিশ্চিত করা
+    const dirInfo = await FileSystem.getInfoAsync(CACHE_DIR);
+    if (!dirInfo.exists) {
+      await FileSystem.makeDirectoryAsync(CACHE_DIR, { intermediates: true });
+    }
+    // ডাউনলোড করা
+    const downloadRes = await FileSystem.downloadAsync(url, cachedPath);
+    return downloadRes.uri;
+  } catch (error) {
+    console.error("Image loading error:", error);
     return "";
   }
 }
-
 export async function preloadPages(currentPage: number): Promise<void> {
   const toPreload = [currentPage + 1, currentPage + 2, currentPage + 3];
   for (const p of toPreload) {
